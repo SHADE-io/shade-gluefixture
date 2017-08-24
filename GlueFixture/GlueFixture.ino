@@ -19,7 +19,7 @@
 #include <Wire.h>
 #include "utility/Adafruit_MS_PWMServoDriver.h"
 
-//#define LA_DEBUG
+//#define LA_DEBUG  // Uncomment to get Average and target counts for the linear actuator position
 
 #define TOP 0
 #define BOTTOM 1
@@ -57,6 +57,10 @@ const int bottomGluePin = 3;
 const int stopButtonPin = 8;
 const int diffuserGluePin = A1; // Not currently in use
 
+// Interrupt timing
+uint32_t currStopButtonTime = 0;
+uint32_t prevStopButtonTime = 0;
+
 // Interrupt Flags
 volatile byte topButtonPressed = false;
 volatile byte bottomButtonPressed = false;
@@ -80,12 +84,15 @@ void glueTop() {
 
 ISR (PCINT0_vect) // handle pin change interrupt for D8 to D13 here
 {
-  Serial.println("STOP!");
-  //return;
-  digitalWrite(glueRelayPin, HIGH);
-  stopButtonPressed = true;
-  topButtonPressed = false;
-  bottomButtonPressed = false;
+  currStopButtonTime = millis();
+  if (currStopButtonTime - prevStopButtonTime > 250) {
+	Serial.println("STOP!");
+    digitalWrite(glueRelayPin, HIGH);
+    stopButtonPressed = true;
+    topButtonPressed = false;
+    bottomButtonPressed = false;
+	prevStopButtonTime = currStopButtonTime;
+  }
 }
 
 /******************************* Helper Functions ***************************/
@@ -101,6 +108,11 @@ void moveStepper(int steps, String direction) {
   if(steps < 0)
     return;
 
+  Serial.print("Moving stepper motor ");
+  Serial.print(direction);
+  Serial.print(" by ");
+  Serial.print(steps);
+  Serial.println(" steps");
   if(direction.equals("FORWARD"))
     for (int i = 0; i < steps && !stopButtonPressed; i += 1)
       stepperMotor->step(1, FORWARD, MICROSTEP);
@@ -178,7 +190,7 @@ void moveLA(float mm) {
 
 // Dispenses glue for the top piece of the Shade product.
 void executeGlueTop() {
-  Serial.println("Starting to glue top.");
+  Serial.println("Starting to glue top");
 
   stepperMotor->setSpeed(TOP_STEPPER_SPEED);
   delay(200);
@@ -193,7 +205,7 @@ void executeGlueTop() {
   if (stopButtonPressed) {
     attachButtonISR();
     topButtonPressed = false;
-    Serial.println("User pressed stop.");
+    Serial.println("User pressed stop");
     moveLA(LA_DEFAULT_POSITION);
     return;
   }
@@ -208,12 +220,12 @@ void executeGlueTop() {
   attachButtonISR();
   topButtonPressed = false;
 
-  Serial.println("Finished gluing top.");
+  Serial.println("Finished gluing top");
 }
 
 // Dispenses glue for the bottom piece of the Shade product.
 void executeGlueBottom() {
-  Serial.println("Starting to glue bottom.");
+  Serial.println("Starting to glue bottom");
   delay(200);
 
   stepperMotor->setSpeed(BOTTOM_STEPPER_SPEED);
@@ -226,7 +238,7 @@ void executeGlueBottom() {
   if (stopButtonPressed) {
     attachButtonISR();
     bottomButtonPressed = false;
-    Serial.println("User pressed stop.");
+    Serial.println("User pressed stop");
     return;
   }
 
@@ -243,7 +255,7 @@ void executeGlueBottom() {
 
   bottomButtonPressed = false;
 
-  Serial.println("Finished gluing bottom.");
+  Serial.println("Finished gluing bottom");
 }
 
 // Removes ISRs, called in the middle of functions.
@@ -264,7 +276,7 @@ void attachButtonISR() {
 void setup() {
   // set up Serial library at 9600 bps
   Serial.begin(9600);
-  Serial.println("Setup Begin");
+  Serial.println("Setup begin");
 
   // Button pins
   pinMode(topGluePin, INPUT_PULLUP);
@@ -291,7 +303,7 @@ void setup() {
   //moveLA(50);
   moveLA(LA_DEFAULT_POSITION);
 
-  Serial.print("Setup ended\n");
+  Serial.println("Setup ended");
   clearButtons();
 }
 
