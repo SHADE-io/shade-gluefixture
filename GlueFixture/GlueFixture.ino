@@ -19,6 +19,8 @@
 #include <Wire.h>
 #include "utility/Adafruit_MS_PWMServoDriver.h"
 
+/******************************* Constants **********************************/
+
 //#define LA_DEBUG  // Uncomment to get Average and target counts for the linear actuator position
 
 #define TOP 0
@@ -41,9 +43,7 @@
 #define LA_DEFAULT_POSITION 10
 
 // Linear Actuator Position running sum
-#define NUM_SAMPLES 40
-
-/******************************* Variables **********************************/
+#define NUM_SAMPLES 30
 
 // Analog Pins
 const int laPositionPin = A0;
@@ -56,6 +56,8 @@ const int topGluePin = 2;
 const int bottomGluePin = 3;
 const int stopButtonPin = 8;
 const int diffuserGluePin = A1; // Not currently in use
+
+/*************************** Global Variables *******************************/
 
 // Interrupt timing
 uint32_t currStopButtonTime = 0;
@@ -82,8 +84,7 @@ void glueTop() {
   topButtonPressed = true;
 }
 
-ISR (PCINT0_vect) // handle pin change interrupt for D8 to D13 here
-{
+ISR (PCINT0_vect) { // handle pin change interrupt for D8 to D13 here
   currStopButtonTime = millis();
   if (currStopButtonTime - prevStopButtonTime > 250) {
 	Serial.println("STOP!");
@@ -104,21 +105,30 @@ void clearButtons(void) {
 }
 
 // Moves the stepper motor while still being able to use the stop button. Direction = FORWARD or BACKWARD. Default BACKWARD if no valid entry.
-void moveStepper(int steps, String direction) {
+void moveStepper(int steps, int direction) {
   if(steps < 0)
     return;
 
+  String directionString;
+  switch (direction) {
+	  case FORWARD:
+	    directionString = "forward";
+		break;
+	  case BACKWARD:
+	    directionString = "backward";
+		break;
+	  default:
+	    Serial.println("Invalid motor direction given");
+	    return;
+  }
+  
   Serial.print("Moving stepper motor ");
-  Serial.print(direction);
+  Serial.print(directionString);
   Serial.print(" by ");
   Serial.print(steps);
   Serial.println(" steps");
-  if(direction.equals("FORWARD"))
-    for (int i = 0; i < steps && !stopButtonPressed; i += 1)
-      stepperMotor->step(1, FORWARD, MICROSTEP);
-  else if(direction.equals("BACKWARD"))
-    for (int i = 0; i < steps && !stopButtonPressed; i += 1)
-      stepperMotor->step(1, BACKWARD, MICROSTEP);
+  for (int i = 0; i < steps && !stopButtonPressed; i += 1)
+    stepperMotor->step(1, direction, MICROSTEP);
 }
 
 // Converts mm to the counts on the arduino's ADC, based on 12V supply and voltage division into the arduino.
@@ -271,7 +281,7 @@ void attachButtonISR() {
   attachInterrupt(digitalPinToInterrupt(topGluePin), glueTop, FALLING);
 }
 
-/********************************** Arduino **********&**********************/
+/********************************** Arduino *********************************/
 
 void setup() {
   // set up Serial library at 9600 bps
