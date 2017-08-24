@@ -211,7 +211,6 @@ void executeGlue(int position) {
     
     Serial.print("Starting to glue ");
     Serial.println(positionString);
-    delay(200);
     
     stepperMotor->setSpeed(stepperSpeed);
 
