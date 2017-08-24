@@ -41,6 +41,8 @@
 #define LA_TOP_POSITION 40.2 //41.5
 #define LA_BOTTOM_POSITION 43.5
 #define LA_DEFAULT_POSITION 10
+#define LA_MAX_POS 50.8
+#define LA_MIN_POS 0
 
 // Linear Actuator Position running sum
 #define NUM_SAMPLES 30
@@ -133,11 +135,10 @@ void moveStepper(int steps, int direction) {
 
 // Converts mm to the counts on the arduino's ADC, based on 12V supply and voltage division into the arduino.
 uint16_t mmToCounts(float mm) {
-    if (mm < 0 || mm > 50.8)
+    if (mm < LA_MIN_POS || mm > LA_MAX_POS)
         return -1;
 
-    float maxMM = 50.8;
-    float targetVoltage = (mm / maxMM) * (LA_UPPER_VOTAGE - LA_LOWER_VOLTAGE) + LA_LOWER_VOLTAGE;
+    float targetVoltage = (mm / LA_MAX_POS) * (LA_UPPER_VOTAGE - LA_LOWER_VOLTAGE) + LA_LOWER_VOLTAGE;
 
     return (uint16_t) ((targetVoltage * LA_VOLTAGE_RATIO) / V_PER_COUNT);
 }
@@ -147,7 +148,7 @@ void moveLA(float mm) {
     Serial.print("Moving linear actuator to ");
     Serial.println(mm);
 
-    if (mm < 0 || mm > 50.8)
+    if (mm < LA_MIN_POS || mm > LA_MAX_POS)
         return;
 
     uint16_t avgSum = 0;
