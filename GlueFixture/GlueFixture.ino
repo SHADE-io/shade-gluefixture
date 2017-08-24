@@ -21,7 +21,8 @@
 
 /******************************* Constants **********************************/
 
-//#define LA_DEBUG // Uncomment to get Average and target counts for the linear actuator position
+//#define LA_DEBUG // Uncomment to get average and target counts for the linear actuator position
+//#define BUTTON_DEBUG  // Uncomment to see button states in each loop iteration instead of gluing
 
 #define TOP 0
 #define BOTTOM 1
@@ -89,12 +90,12 @@ void glueTop() {
 ISR (PCINT0_vect) { // handle pin change interrupt for D8 to D13 here
     currStopButtonTime = millis();
     if (currStopButtonTime - prevStopButtonTime > 250) {
+        #ifndef BUTTON_DEBUG
         Serial.println("STOP!");
         digitalWrite(glueRelayPin, HIGH);
+        #endif // BUTTON_DEBUG
         stopButtonPressed = true;
-        topButtonPressed = false;
-        bottomButtonPressed = false;
-	prevStopButtonTime = currStopButtonTime;
+        prevStopButtonTime = currStopButtonTime;
     }
 }
 
@@ -151,18 +152,18 @@ void moveLA(float mm) {
     if (mm < LA_MIN_POS || mm > LA_MAX_POS)
         return;
 
-    uint16_t avgSum = 0;
+    uint16_t accCounts = 0;
     uint16_t avgCounts = 0;
     int stepperDirection = RELEASE;
     uint16_t targetCounts = mmToCounts(mm);
 
     while (avgCounts != targetCounts && !stopButtonPressed) {
-        // Find the starting position
-        avgSum = 0;
+        // Find the linear actuator's position
+        accCounts = 0;
         for(int i = 0; i < NUM_SAMPLES; i++)
-            avgSum += analogRead(laPositionPin);
+            accCounts += analogRead(laPositionPin);
+        avgCounts = (accCounts / NUM_SAMPLES);
 
-        avgCounts = (avgSum / NUM_SAMPLES);
         stepperDirection = (avgCounts < targetCounts) ? BACKWARD : FORWARD;
 
         laMotor->run(stepperDirection);
@@ -172,11 +173,10 @@ void moveLA(float mm) {
         }
     
         #ifdef LA_DEBUG
-        Serial.println("Average Counts:");
-        Serial.println(avgCounts);
-        Serial.println("Target Counts:");
+        Serial.print("Average Counts: ");
+        Serial.print(avgCounts);
+        Serial.print("    Target Counts: ");
         Serial.println(targetCounts);
-        Serial.println();
         #endif // LA_DEBUG
     }
     laMotor->run(RELEASE);
@@ -284,7 +284,6 @@ void setup() {
     // Move the LA totally extended. Speed of 27 is the minimum!
     laMotor->setSpeed(80);
 
-    //moveLA(50);
     moveLA(LA_DEFAULT_POSITION);
 
     Serial.println("Setup ended");
@@ -292,6 +291,18 @@ void setup() {
 }
 
 void loop() {
+    #ifdef BUTTON_DEBUG
+    if (bottomButtonPressed || topButtonPressed || stopButtonPressed) {
+        Serial.print("Bottom: ");
+        Serial.print(bottomButtonPressed);
+        Serial.print("    Top: ");
+        Serial.print(topButtonPressed);
+        Serial.print("    Stop: ");
+        Serial.println(stopButtonPressed);
+    }
+    stopButtonPressed = false;
+
+    #else // !BUTTON_DEBUG
     if (bottomButtonPressed)
         executeGlue(BOTTOM);
     else if (topButtonPressed)
@@ -300,5 +311,6 @@ void loop() {
         stopButtonPressed = false;
         moveLA(LA_DEFAULT_POSITION);
     }
+    #endif // BUTTON_DEBUG
     clearButtons();
 }
