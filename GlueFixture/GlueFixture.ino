@@ -221,7 +221,7 @@ void executeGlueTop() {
   }
 
   digitalWrite(glueRelayPin, LOW);
-  moveStepper(TOP_STEPPER_STEPS, "BACKWARD");
+  moveStepper(TOP_STEPPER_STEPS, BACKWARD);
   stepperMotor->release();
   digitalWrite(glueRelayPin, HIGH);
   delay(1000);
@@ -254,7 +254,7 @@ void executeGlueBottom() {
 
   // Start dispensing then immediately start turning one revolution
   digitalWrite(glueRelayPin, LOW);
-  moveStepper(BOTTOM_STEPPER_STEPS, "FORWARD");
+  moveStepper(BOTTOM_STEPPER_STEPS, FORWARD);
   stepperMotor->release();
   digitalWrite(glueRelayPin, HIGH);
   delay(1000);
