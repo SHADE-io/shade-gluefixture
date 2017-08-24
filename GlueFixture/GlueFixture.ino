@@ -152,49 +152,32 @@ void moveLA(float mm) {
         return;
 
     uint16_t avgSum = 0;
-
-    // Find the starting position
-    for(int i = 0; i < NUM_SAMPLES; i++)
-        avgSum += analogRead(laPositionPin);
-
-    uint16_t avgCounts = (avgSum / NUM_SAMPLES);
-
-    // Find the target counts
+    uint16_t avgCounts = 0;
+    int stepperDirection = RELEASE;
     uint16_t targetCounts = mmToCounts(mm);
 
-    if (avgCounts > targetCounts) {
-        while (avgCounts > targetCounts && !stopButtonPressed) {
-            laMotor->run(FORWARD);
+    while (avgCounts != targetCounts && !stopButtonPressed) {
+        // Find the starting position
+        avgSum = 0;
+        for(int i = 0; i < NUM_SAMPLES; i++)
+            avgSum += analogRead(laPositionPin);
 
-            avgSum = 0;
-            for(int i = 0; i < NUM_SAMPLES; i++)
-                avgSum += analogRead(laPositionPin);
+        avgCounts = (avgSum / NUM_SAMPLES);
+        stepperDirection = (avgCounts < targetCounts) ? BACKWARD : FORWARD;
 
-            avgCounts = (uint16_t) (avgSum / NUM_SAMPLES);
+        laMotor->run(stepperDirection);
+        if (stepperDirection == BACKWARD && abs(avgCounts - targetCounts) < 30) {
+            delay(5);
+            laMotor->run(RELEASE);
         }
-    }
-    else if (avgCounts < targetCounts) {
-        while (avgCounts < targetCounts && !stopButtonPressed) {
-            if(abs(avgCounts - targetCounts) < 30) {
-                laMotor->run(BACKWARD);
-                delay(5);
-                laMotor->run(RELEASE);
-            }
-            else laMotor->run(BACKWARD);
-
-            avgSum = 0;
-            for(int i = 0; i < NUM_SAMPLES; i++)
-                avgSum += analogRead(laPositionPin);
-
-            avgCounts = (uint16_t) (avgSum / NUM_SAMPLES);
-        }
-            #ifdef LA_DEBUG
-            Serial.println("Average Counts:");
-            Serial.println(avgCounts);
-            Serial.println("Target Counts:");
-            Serial.println(targetCounts);
-            Serial.println();
-            #endif // LA_DEBUG
+    
+        #ifdef LA_DEBUG
+        Serial.println("Average Counts:");
+        Serial.println(avgCounts);
+        Serial.println("Target Counts:");
+        Serial.println(targetCounts);
+        Serial.println();
+        #endif // LA_DEBUG
     }
     laMotor->run(RELEASE);
 }
@@ -243,17 +226,18 @@ void executeGlue(int position) {
     }
 
     // Start dispensing then immediately start turning one revolution
+    Serial.println("Glue activated");
     digitalWrite(glueRelayPin, LOW);
     moveStepper(stepperSteps, stepperDirection);
     stepperMotor->release();
     digitalWrite(glueRelayPin, HIGH);
+    Serial.println("Glue deactivated");
     delay(1000);
 
-    moveLA(LA_DEFAULT_POSITION);
+    if (!stopButtonPressed)  // prevent redundant call if stop button pressed
+        moveLA(LA_DEFAULT_POSITION);
 
     attachButtonISR();
-
-    bottomButtonPressed = false;
 
     Serial.print("Finished gluing ");
     Serial.println(positionString);
