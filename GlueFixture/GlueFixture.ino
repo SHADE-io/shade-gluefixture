@@ -21,7 +21,7 @@
 
 /******************************* Constants **********************************/
 
-//#define LA_DEBUG  // Uncomment to get Average and target counts for the linear actuator position
+//#define LA_DEBUG // Uncomment to get Average and target counts for the linear actuator position
 
 #define TOP 0
 #define BOTTOM 1
@@ -77,254 +77,244 @@ Adafruit_DCMotor *laMotor = AFMS.getMotor(1);
 // ISR's written to be extremely short or else the arduino halts. Check flags in the main arduino loop.
 
 void glueBottom() {
-  bottomButtonPressed = true;
+    bottomButtonPressed = true;
 }
 
 void glueTop() {
-  topButtonPressed = true;
+    topButtonPressed = true;
 }
 
 ISR (PCINT0_vect) { // handle pin change interrupt for D8 to D13 here
-  currStopButtonTime = millis();
-  if (currStopButtonTime - prevStopButtonTime > 250) {
-	Serial.println("STOP!");
-    digitalWrite(glueRelayPin, HIGH);
-    stopButtonPressed = true;
-    topButtonPressed = false;
-    bottomButtonPressed = false;
+    currStopButtonTime = millis();
+    if (currStopButtonTime - prevStopButtonTime > 250) {
+        Serial.println("STOP!");
+        digitalWrite(glueRelayPin, HIGH);
+        stopButtonPressed = true;
+        topButtonPressed = false;
+        bottomButtonPressed = false;
 	prevStopButtonTime = currStopButtonTime;
-  }
+    }
 }
 
 /******************************* Helper Functions ***************************/
 
 // Clears the buttons in case they were pressed during another function
 void clearButtons(void) {
-  bottomButtonPressed = false;
-  topButtonPressed = false;
+    bottomButtonPressed = false;
+    topButtonPressed = false;
 }
 
 // Moves the stepper motor while still being able to use the stop button. Direction = FORWARD or BACKWARD. Default BACKWARD if no valid entry.
 void moveStepper(int steps, int direction) {
-  if(steps < 0)
-    return;
+    if(steps < 0)
+        return;
 
-  String directionString;
-  switch (direction) {
-	  case FORWARD:
-	    directionString = "forward";
+    String directionString;
+    switch (direction) {
+	    case FORWARD:
+	        directionString = "forward";
 		break;
-	  case BACKWARD:
-	    directionString = "backward";
+	    case BACKWARD:
+	        directionString = "backward";
 		break;
-	  default:
-	    Serial.println("Invalid motor direction given");
-	    return;
-  }
-  
-  Serial.print("Moving stepper motor ");
-  Serial.print(directionString);
-  Serial.print(" by ");
-  Serial.print(steps);
-  Serial.println(" steps");
-  for (int i = 0; i < steps && !stopButtonPressed; i += 1)
-    stepperMotor->step(1, direction, MICROSTEP);
+	    default:
+	        Serial.println("Invalid motor direction given");
+	        return;
+    }
+    
+    Serial.print("Moving stepper motor ");
+    Serial.print(directionString);
+    Serial.print(" by ");
+    Serial.print(steps);
+    Serial.println(" steps");
+    for (int i = 0; i < steps && !stopButtonPressed; i += 1)
+        stepperMotor->step(1, direction, MICROSTEP);
 }
 
 // Converts mm to the counts on the arduino's ADC, based on 12V supply and voltage division into the arduino.
 uint16_t mmToCounts(float mm) {
-  if (mm < 0 || mm > 50.8)
-    return -1;
+    if (mm < 0 || mm > 50.8)
+        return -1;
 
-  float maxMM = 50.8;
-  float targetVoltage = (mm / maxMM) * (LA_UPPER_VOTAGE - LA_LOWER_VOLTAGE) + LA_LOWER_VOLTAGE;
+    float maxMM = 50.8;
+    float targetVoltage = (mm / maxMM) * (LA_UPPER_VOTAGE - LA_LOWER_VOLTAGE) + LA_LOWER_VOLTAGE;
 
-  return (uint16_t) ((targetVoltage * LA_VOLTAGE_RATIO) / V_PER_COUNT);
+    return (uint16_t) ((targetVoltage * LA_VOLTAGE_RATIO) / V_PER_COUNT);
 }
 
 // Takes in a float mm value and moves the linear actuator. Valid values from 0 to 50.8 mm
 void moveLA(float mm) {
-  Serial.print("Moving linear actuator to ");
-  Serial.println(mm);
+    Serial.print("Moving linear actuator to ");
+    Serial.println(mm);
 
-  if (mm < 0 || mm > 50.8)
-    return;
+    if (mm < 0 || mm > 50.8)
+        return;
 
-  uint16_t avgSum = 0;
+    uint16_t avgSum = 0;
 
-  // Find the starting position
-  for(int i = 0; i < NUM_SAMPLES; i++)
-    avgSum += analogRead(laPositionPin);
-
-  uint16_t avgCounts = (avgSum / NUM_SAMPLES);
-
-  // Find the target counts
-  uint16_t targetCounts = mmToCounts(mm);
-
-  if (avgCounts > targetCounts) {
-    while (avgCounts > targetCounts && !stopButtonPressed) {
-      laMotor->run(FORWARD);
-
-      avgSum = 0;
-      for(int i = 0; i < NUM_SAMPLES; i++)
+    // Find the starting position
+    for(int i = 0; i < NUM_SAMPLES; i++)
         avgSum += analogRead(laPositionPin);
 
-      avgCounts = (uint16_t) (avgSum / NUM_SAMPLES);
-    }
-  }
-  else if (avgCounts < targetCounts) {
-    while (avgCounts < targetCounts && !stopButtonPressed) {
-      if(abs(avgCounts - targetCounts) < 30) {
-        laMotor->run(BACKWARD);
-        delay(5);
-        laMotor->run(RELEASE);
-      }
-      else laMotor->run(BACKWARD);
+    uint16_t avgCounts = (avgSum / NUM_SAMPLES);
 
-      avgSum = 0;
-      for(int i = 0; i < NUM_SAMPLES; i++)
-        avgSum += analogRead(laPositionPin);
+    // Find the target counts
+    uint16_t targetCounts = mmToCounts(mm);
 
-      avgCounts = (uint16_t) (avgSum / NUM_SAMPLES);
+    if (avgCounts > targetCounts) {
+        while (avgCounts > targetCounts && !stopButtonPressed) {
+            laMotor->run(FORWARD);
+
+            avgSum = 0;
+            for(int i = 0; i < NUM_SAMPLES; i++)
+                avgSum += analogRead(laPositionPin);
+
+            avgCounts = (uint16_t) (avgSum / NUM_SAMPLES);
+        }
     }
-      #ifdef LA_DEBUG
-      Serial.println("Average Counts:");
-      Serial.println(avgCounts);
-      Serial.println("Target Counts:");
-      Serial.println(targetCounts);
-      Serial.println();
-      #endif // LA_DEBUG
-  }
-  laMotor->run(RELEASE);
+    else if (avgCounts < targetCounts) {
+        while (avgCounts < targetCounts && !stopButtonPressed) {
+            if(abs(avgCounts - targetCounts) < 30) {
+                laMotor->run(BACKWARD);
+                delay(5);
+                laMotor->run(RELEASE);
+            }
+            else laMotor->run(BACKWARD);
+
+            avgSum = 0;
+            for(int i = 0; i < NUM_SAMPLES; i++)
+                avgSum += analogRead(laPositionPin);
+
+            avgCounts = (uint16_t) (avgSum / NUM_SAMPLES);
+        }
+            #ifdef LA_DEBUG
+            Serial.println("Average Counts:");
+            Serial.println(avgCounts);
+            Serial.println("Target Counts:");
+            Serial.println(targetCounts);
+            Serial.println();
+            #endif // LA_DEBUG
+    }
+    laMotor->run(RELEASE);
 }
 
-// Dispenses glue for the top piece of the Shade product.
-void executeGlueTop() {
-  Serial.println("Starting to glue top");
+// Dispenses glue for top or bottom case of the Shade device
+void executeGlue(int position) {
+    String positionString;
+    int stepperSpeed = 0;
+    int stepperSteps = 0;
+    int stepperDirection = RELEASE;
+    float laPosition = LA_DEFAULT_POSITION;
+    switch (position) {
+        case TOP:
+            positionString = "top";
+            stepperSpeed = TOP_STEPPER_SPEED;
+            stepperSteps = TOP_STEPPER_STEPS;
+            stepperDirection = BACKWARD;
+            laPosition = LA_TOP_POSITION;
+            break;
+        case BOTTOM:
+            positionString = "bottom";
+            stepperSpeed = BOTTOM_STEPPER_SPEED;
+            stepperSteps = BOTTOM_STEPPER_STEPS;
+            stepperDirection = FORWARD;
+            laPosition = LA_BOTTOM_POSITION;
+            break;
+        default:
+            Serial.println("Invalid position given");
+            return;
+    }
+    
+    Serial.print("Starting to glue ");
+    Serial.println(positionString);
+    delay(200);
+    
+    stepperMotor->setSpeed(stepperSpeed);
 
-  stepperMotor->setSpeed(TOP_STEPPER_SPEED);
-  delay(200);
+    detachButtonISR();
 
-  detachButtonISR();
+    // Move the LA to the bottom position
+    moveLA(laPosition);
+    delay(1000);
+    if (stopButtonPressed) {
+        attachButtonISR();
+        return;
+    }
 
-  // Move the LA to the top position
-  moveLA(LA_TOP_POSITION);
-  delay(1000);
+    // Start dispensing then immediately start turning one revolution
+    digitalWrite(glueRelayPin, LOW);
+    moveStepper(stepperSteps, stepperDirection);
+    stepperMotor->release();
+    digitalWrite(glueRelayPin, HIGH);
+    delay(1000);
 
-  // Start dispensing then immediately start turning one revolution
-  if (stopButtonPressed) {
-    attachButtonISR();
-    topButtonPressed = false;
-    Serial.println("User pressed stop");
     moveLA(LA_DEFAULT_POSITION);
-    return;
-  }
 
-  digitalWrite(glueRelayPin, LOW);
-  moveStepper(TOP_STEPPER_STEPS, BACKWARD);
-  stepperMotor->release();
-  digitalWrite(glueRelayPin, HIGH);
-  delay(1000);
-
-  moveLA(LA_DEFAULT_POSITION);
-  attachButtonISR();
-  topButtonPressed = false;
-
-  Serial.println("Finished gluing top");
-}
-
-// Dispenses glue for the bottom piece of the Shade product.
-void executeGlueBottom() {
-  Serial.println("Starting to glue bottom");
-  delay(200);
-
-  stepperMotor->setSpeed(BOTTOM_STEPPER_SPEED);
-
-  detachButtonISR();
-
-  // Move the LA to the bottom position
-  moveLA(LA_BOTTOM_POSITION);
-  delay(1000);
-  if (stopButtonPressed) {
     attachButtonISR();
+
     bottomButtonPressed = false;
-    Serial.println("User pressed stop");
-    return;
-  }
 
-  // Start dispensing then immediately start turning one revolution
-  digitalWrite(glueRelayPin, LOW);
-  moveStepper(BOTTOM_STEPPER_STEPS, FORWARD);
-  stepperMotor->release();
-  digitalWrite(glueRelayPin, HIGH);
-  delay(1000);
-
-  moveLA(LA_DEFAULT_POSITION);
-
-  attachButtonISR();
-
-  bottomButtonPressed = false;
-
-  Serial.println("Finished gluing bottom");
+    Serial.print("Finished gluing ");
+    Serial.println(positionString);
 }
 
 // Removes ISRs, called in the middle of functions.
 void detachButtonISR() {
-  // Detatch interrupts
-  detachInterrupt(digitalPinToInterrupt(topGluePin));
-  detachInterrupt(digitalPinToInterrupt(bottomGluePin));
+    // Detatch interrupts
+    detachInterrupt(digitalPinToInterrupt(topGluePin));
+    detachInterrupt(digitalPinToInterrupt(bottomGluePin));
 }
 
 // Reattaches ISRs, called after end of functions.
 void attachButtonISR() {
-  attachInterrupt(digitalPinToInterrupt(bottomGluePin), glueBottom, FALLING);
-  attachInterrupt(digitalPinToInterrupt(topGluePin), glueTop, FALLING);
+    attachInterrupt(digitalPinToInterrupt(bottomGluePin), glueBottom, FALLING);
+    attachInterrupt(digitalPinToInterrupt(topGluePin), glueTop, FALLING);
 }
 
 /********************************** Arduino *********************************/
 
 void setup() {
-  // set up Serial library at 9600 bps
-  Serial.begin(9600);
-  Serial.println("Setup begin");
+    // set up Serial library at 9600 bps
+    Serial.begin(9600);
+    Serial.println("Setup begin");
 
-  // Button pins
-  pinMode(topGluePin, INPUT_PULLUP);
-  pinMode(bottomGluePin, INPUT_PULLUP);
-  pinMode(stopButtonPin, INPUT_PULLUP);
-  attachButtonISR();
+    // Button pins
+    pinMode(topGluePin, INPUT_PULLUP);
+    pinMode(bottomGluePin, INPUT_PULLUP);
+    pinMode(stopButtonPin, INPUT_PULLUP);
+    attachButtonISR();
 
-  // Set up the stop button, https://playground.arduino.cc/Main/PinChangeInterrupt
-  *digitalPinToPCMSK(stopButtonPin) |= bit (digitalPinToPCMSKbit(stopButtonPin));
-  PCIFR  |= bit (digitalPinToPCICRbit(stopButtonPin));
-  PCICR  |= bit (digitalPinToPCICRbit(stopButtonPin));
+    // Set up the stop button, https://playground.arduino.cc/Main/PinChangeInterrupt
+    *digitalPinToPCMSK(stopButtonPin) |= bit (digitalPinToPCMSKbit(stopButtonPin));
+    PCIFR |= bit (digitalPinToPCICRbit(stopButtonPin));
+    PCICR |= bit (digitalPinToPCICRbit(stopButtonPin));
 
-  // Relay pins
-  pinMode(glueRelayPin, OUTPUT);
-  digitalWrite(glueRelayPin, HIGH);
+    // Relay pins
+    pinMode(glueRelayPin, OUTPUT);
+    digitalWrite(glueRelayPin, HIGH);
 
-  // Setup the motor shield, create with the default frequency 1.6KHz
-  AFMS.begin();
-  stepperMotor->setSpeed(30); // 10 rpm
+    // Setup the motor shield, create with the default frequency 1.6KHz
+    AFMS.begin();
+    stepperMotor->setSpeed(30); // 10 rpm
 
-  // Move the LA totally extended. Speed of 27 is the minimum!
-  laMotor->setSpeed(80);
+    // Move the LA totally extended. Speed of 27 is the minimum!
+    laMotor->setSpeed(80);
 
-  //moveLA(50);
-  moveLA(LA_DEFAULT_POSITION);
+    //moveLA(50);
+    moveLA(LA_DEFAULT_POSITION);
 
-  Serial.println("Setup ended");
-  clearButtons();
+    Serial.println("Setup ended");
+    clearButtons();
 }
 
 void loop() {
-  if (bottomButtonPressed)
-    executeGlueBottom();
-  else if (topButtonPressed)
-    executeGlueTop();
-  else if (stopButtonPressed) {
-    stopButtonPressed = false;
-    moveLA(LA_DEFAULT_POSITION);
-  }
-  clearButtons();
+    if (bottomButtonPressed)
+        executeGlue(BOTTOM);
+    else if (topButtonPressed)
+        executeGlue(TOP);
+    else if (stopButtonPressed) {
+        stopButtonPressed = false;
+        moveLA(LA_DEFAULT_POSITION);
+    }
+    clearButtons();
 }
