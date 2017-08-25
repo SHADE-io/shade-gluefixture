@@ -39,7 +39,7 @@
 #define V_PER_COUNT .004882
 
 // Linear Actuator Positions (in mm). 0 is fully extended, ~50 is fully retracted.
-#define LA_TOP_POSITION 38.5 // CHANGE THIS NUMBER TO ADJUST TOP GLUING HEIGHT (0.5mm resolution)
+#define LA_TOP_POSITION 39.5 // CHANGE THIS NUMBER TO ADJUST TOP GLUING HEIGHT (0.5mm resolution)
 #define LA_BOTTOM_POSITION 42.5 // CHANGE THIS NUMBER TO ADJUST BOTTOM GLUING HEIGHT (0.5mm resolution)
 #define LA_DEFAULT_POSITION 10
 #define LA_MAX_POS 50.8
