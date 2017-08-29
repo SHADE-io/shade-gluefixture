@@ -31,6 +31,9 @@
 #define TOP_STEPPER_STEPS 193
 #define BOTTOM_STEPPER_STEPS 197
 
+#define LA_SPEED_FAST 80
+#define LA_SPEED_SLOW 30
+
 // Math for voltage calucations
 #define LA_VOLTAGE_RATIO 0.36738906 // 356.0 / (613.0 + 356.0);
 #define LA_SUPPLY_VOLTAGE 12
@@ -152,17 +155,24 @@ void moveLA(float mm) {
     if (mm < LA_MIN_POS || mm > LA_MAX_POS)
         return;
 
-    uint16_t accCounts = 0;
-    uint16_t avgCounts = 0;
+    uint16_t accCounts = 0, avgCounts = 0, prevCounts = 0;
     int stepperDirection = RELEASE;
     uint16_t targetCounts = mmToCounts(mm);
+    laMotor->setSpeed(LA_SPEED_FAST);
 
-    while (avgCounts != targetCounts && !stopButtonPressed) {
+    while (!stopButtonPressed) {
         // Find the linear actuator's position
         accCounts = 0;
         for(int i = 0; i < NUM_SAMPLES; i++)
             accCounts += analogRead(laPositionPin);
         avgCounts = (accCounts / NUM_SAMPLES);
+
+        if (abs(targetCounts - avgCounts) < 20)
+            laMotor->setSpeed(LA_SPEED_SLOW);
+
+        // Check if read same counts twice in a row to verify height
+        if (avgCounts == targetCounts && avgCounts == prevCounts)
+            break;
 
         stepperDirection = (avgCounts < targetCounts) ? BACKWARD : FORWARD;
 
@@ -174,6 +184,8 @@ void moveLA(float mm) {
         Serial.print("    Target Counts: ");
         Serial.println(targetCounts);
         #endif // LA_DEBUG
+
+        prevCounts = avgCounts;
     }
     laMotor->run(RELEASE);
 }
@@ -275,11 +287,6 @@ void setup() {
 
     // Setup the motor shield, create with the default frequency 1.6KHz
     AFMS.begin();
-    stepperMotor->setSpeed(30); // 10 rpm
-
-    // Move the LA totally extended. Speed of 27 is the minimum!
-    laMotor->setSpeed(80);
-
     moveLA(LA_DEFAULT_POSITION);
 
     Serial.println("Setup ended");
