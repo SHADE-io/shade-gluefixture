@@ -30,6 +30,8 @@
 #define BOTTOM_STEPPER_SPEED 17
 #define TOP_STEPPER_STEPS 193
 #define BOTTOM_STEPPER_STEPS 197
+#define TOP_STEPPER_DIRECTION BACKWARD
+#define BOTTOM_STEPPER_DIRECTION BACKWARD
 
 #define LA_SPEED_FAST 80
 #define LA_SPEED_SLOW 30
@@ -43,7 +45,7 @@
 
 // Linear Actuator Positions (in mm). 0 is fully extended, ~50 is fully retracted.
 #define LA_TOP_POSITION 39 // CHANGE THIS NUMBER TO ADJUST TOP GLUING HEIGHT (0.5mm resolution)
-#define LA_BOTTOM_POSITION 42.5 // CHANGE THIS NUMBER TO ADJUST BOTTOM GLUING HEIGHT (0.5mm resolution)
+#define LA_BOTTOM_POSITION 41 // CHANGE THIS NUMBER TO ADJUST BOTTOM GLUING HEIGHT (0.5mm resolution)
 #define LA_DEFAULT_POSITION 10
 #define LA_MAX_POS 50.8
 #define LA_MIN_POS 0
@@ -202,14 +204,14 @@ void executeGlue(int position) {
             positionString = "top";
             stepperSpeed = TOP_STEPPER_SPEED;
             stepperSteps = TOP_STEPPER_STEPS;
-            stepperDirection = BACKWARD;
+            stepperDirection = TOP_STEPPER_DIRECTION;
             laPosition = LA_TOP_POSITION;
             break;
         case BOTTOM:
             positionString = "bottom";
             stepperSpeed = BOTTOM_STEPPER_SPEED;
             stepperSteps = BOTTOM_STEPPER_STEPS;
-            stepperDirection = FORWARD;
+            stepperDirection = BOTTOM_STEPPER_DIRECTION;
             laPosition = LA_BOTTOM_POSITION;
             break;
         default:
