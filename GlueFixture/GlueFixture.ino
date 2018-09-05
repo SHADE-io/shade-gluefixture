@@ -42,8 +42,8 @@
 #define V_PER_COUNT .004882
 
 // Linear Actuator Positions (in mm). 0 is fully extended, ~50 is fully retracted.
-#define LA_TOP_POSITION 38.5 // CHANGE THIS NUMBER TO ADJUST TOP GLUING HEIGHT (0.5mm resolution)
-#define LA_BOTTOM_POSITION 42.5 // CHANGE THIS NUMBER TO ADJUST BOTTOM GLUING HEIGHT (0.5mm resolution)
+#define LA_TOP_POSITION 38 // CHANGE THIS NUMBER TO ADJUST TOP GLUING HEIGHT (0.5mm resolution)
+#define LA_BOTTOM_POSITION 40 // CHANGE THIS NUMBER TO ADJUST BOTTOM GLUING HEIGHT (0.5mm resolution)
 #define LA_DEFAULT_POSITION 10
 #define LA_MAX_POS 50.8
 #define LA_MIN_POS 0
@@ -190,6 +190,79 @@ void moveLA(float mm) {
     laMotor->run(RELEASE);
 }
 
+// Calibrate position for the linear actuator
+void calibrateLA(void) {
+    uint32_t minCounts = 0, maxCounts = 0;
+    uint16_t accCounts = 0, avgCounts = 0;
+    uint16_t prevCounts[] = {1000, 2000};
+    bool is_still = false;
+    int stepperDirection = RELEASE;
+    laMotor->setSpeed(LA_SPEED_FAST);
+
+    Serial.println("Calibrating linear actuator...");
+
+    while (!stopButtonPressed) {
+        stepperDirection = FORWARD;
+        laMotor->run(stepperDirection);
+        
+        // Find the linear actuator's position
+        accCounts = 0;
+        for(int i = 0; i < NUM_SAMPLES; i++) {
+            accCounts += analogRead(laPositionPin);
+        }
+        avgCounts = (accCounts / NUM_SAMPLES);
+
+        is_still = true;
+        for (int i = sizeof(prevCounts)/sizeof(uint16_t) - 1; i > 0; --i) {
+          is_still &= abs(avgCounts - prevCounts[i]) < 3;
+          prevCounts[i] = prevCounts[i-1];
+          
+        }
+        is_still &= abs(avgCounts - prevCounts[0]) < 3;
+        prevCounts[0] = avgCounts;
+        Serial.println(avgCounts);
+        
+        // Check if read same counts twice in a row to verify height
+        if (is_still)
+            break;
+    }
+    maxCounts = avgCounts;
+    Serial.print("Max counts: ");
+    Serial.println(maxCounts);
+
+    memset(prevCounts, 1000, sizeof(prevCounts)/sizeof(uint16_t));
+    prevCounts[0] = 2000;
+    while (!stopButtonPressed) {
+        stepperDirection = BACKWARD;
+        laMotor->run(stepperDirection);
+        
+        // Find the linear actuator's position
+        accCounts = 0;
+        for(int i = 0; i < NUM_SAMPLES; i++)
+            accCounts += analogRead(laPositionPin);
+        avgCounts = (accCounts / NUM_SAMPLES);
+
+        is_still = true;
+        for (int i = sizeof(prevCounts)/sizeof(uint16_t) - 1; i > 0; --i) {
+          is_still &= abs(avgCounts - prevCounts[i]) < 3;
+          prevCounts[i] = prevCounts[i-1];
+          
+        }
+        is_still &= abs(avgCounts - prevCounts[0]) < 3;
+        prevCounts[0] = avgCounts;
+        Serial.println(avgCounts);
+        
+        // Check if read same counts twice in a row to verify height
+        if (is_still)
+            break;
+    }
+    minCounts = avgCounts;
+    Serial.print("Min counts: ");
+    Serial.println(minCounts);
+    
+    laMotor->run(RELEASE);
+}
+
 // Dispenses glue for top or bottom case of the Shade device
 void executeGlue(int position) {
     String positionString;
@@ -287,6 +360,9 @@ void setup() {
 
     // Setup the motor shield, create with the default frequency 1.6KHz
     AFMS.begin();
+
+    calibrateLA();
+    
     moveLA(LA_DEFAULT_POSITION);
 
     Serial.println("Setup ended");
