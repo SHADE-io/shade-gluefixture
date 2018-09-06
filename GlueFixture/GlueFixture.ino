@@ -42,14 +42,20 @@
 #define V_PER_COUNT .004882
 
 // Linear Actuator Positions (in mm). 0 is fully extended, ~50 is fully retracted.
-#define LA_TOP_POSITION 38 // CHANGE THIS NUMBER TO ADJUST TOP GLUING HEIGHT (0.5mm resolution)
-#define LA_BOTTOM_POSITION 40 // CHANGE THIS NUMBER TO ADJUST BOTTOM GLUING HEIGHT (0.5mm resolution)
-#define LA_DEFAULT_POSITION 10
+#define LA_TOP_POSITION 12.8 // CHANGE THIS NUMBER TO ADJUST TOP GLUING HEIGHT (0.5mm resolution)
+#define LA_BOTTOM_POSITION 10.8 // CHANGE THIS NUMBER TO ADJUST BOTTOM GLUING HEIGHT (0.5mm resolution)
+#define LA_DEFAULT_POSITION 40.8
 #define LA_MAX_POS 50.8
 #define LA_MIN_POS 0
+#define LA_COUNT_EQUALITY_BUFFER 4
+#define LA_CALIBRATION_DELAY 500
 
 // Linear Actuator Position running sum
 #define NUM_SAMPLES 30
+
+// Linear Actuator max counts and min counts from calibration
+uint32_t highLaCounts = 100;
+uint32_t lowLaCounts = 1000;
 
 // Analog Pins
 const int laPositionPin = A0;
@@ -142,9 +148,10 @@ uint16_t mmToCounts(float mm) {
     if (mm < LA_MIN_POS || mm > LA_MAX_POS)
         return -1;
 
-    float targetVoltage = (mm / LA_MAX_POS) * (LA_UPPER_VOTAGE - LA_LOWER_VOLTAGE) + LA_LOWER_VOLTAGE;
+    float targetCounts = (mm / LA_MAX_POS) * abs((float)lowLaCounts - highLaCounts);
+    (lowLaCounts > highLaCounts) ? (targetCounts = lowLaCounts - targetCounts) : (targetCounts += lowLaCounts);
 
-    return (uint16_t) ((targetVoltage * LA_VOLTAGE_RATIO) / V_PER_COUNT);
+    return (uint16_t) targetCounts;
 }
 
 // Takes in a float mm value and moves the linear actuator. Valid values from 0 to 50.8 mm
@@ -193,6 +200,7 @@ void moveLA(float mm) {
 // Calibrate position for the linear actuator
 void calibrateLA(void) {
     uint32_t minCounts = 0, maxCounts = 0;
+    uint32_t running_avg = 0, running_sum = 0;
     uint16_t accCounts = 0, avgCounts = 0;
     uint16_t prevCounts[] = {1000, 2000};
     bool is_still = false;
@@ -214,21 +222,23 @@ void calibrateLA(void) {
 
         is_still = true;
         for (int i = sizeof(prevCounts)/sizeof(uint16_t) - 1; i > 0; --i) {
-          is_still &= abs(avgCounts - prevCounts[i]) < 3;
+          is_still &= abs(avgCounts - prevCounts[i]) < LA_COUNT_EQUALITY_BUFFER;
           prevCounts[i] = prevCounts[i-1];
           
         }
-        is_still &= abs(avgCounts - prevCounts[0]) < 3;
+        is_still &= abs(avgCounts - prevCounts[0]) < LA_COUNT_EQUALITY_BUFFER;
         prevCounts[0] = avgCounts;
         Serial.println(avgCounts);
         
         // Check if read same counts twice in a row to verify height
         if (is_still)
             break;
+
+        delay(LA_CALIBRATION_DELAY);
     }
-    maxCounts = avgCounts;
-    Serial.print("Max counts: ");
-    Serial.println(maxCounts);
+    highLaCounts = avgCounts;
+    Serial.print("High counts: ");
+    Serial.println(highLaCounts);
 
     memset(prevCounts, 1000, sizeof(prevCounts)/sizeof(uint16_t));
     prevCounts[0] = 2000;
@@ -244,21 +254,29 @@ void calibrateLA(void) {
 
         is_still = true;
         for (int i = sizeof(prevCounts)/sizeof(uint16_t) - 1; i > 0; --i) {
-          is_still &= abs(avgCounts - prevCounts[i]) < 3;
-          prevCounts[i] = prevCounts[i-1];
-          
+            is_still &= abs(avgCounts - prevCounts[i]) < LA_COUNT_EQUALITY_BUFFER;
+            prevCounts[i] = prevCounts[i-1]; 
         }
-        is_still &= abs(avgCounts - prevCounts[0]) < 3;
+        is_still &= abs(avgCounts - prevCounts[0]) < LA_COUNT_EQUALITY_BUFFER;
         prevCounts[0] = avgCounts;
         Serial.println(avgCounts);
+
+        running_sum = 0;
+        // Bottom is noisy so calculate a running average as well
+        for (int i = 0; i < sizeof(prevCounts)/sizeof(uint16_t); ++i) {
+            running_sum += prevCounts[i];
+        }
+        running_avg = running_sum / sizeof(prevCounts)/sizeof(uint16_t);
         
         // Check if read same counts twice in a row to verify height
         if (is_still)
             break;
+
+        delay(LA_CALIBRATION_DELAY);
     }
-    minCounts = avgCounts;
-    Serial.print("Min counts: ");
-    Serial.println(minCounts);
+    lowLaCounts = avgCounts;
+    Serial.print("Low counts: ");
+    Serial.println(lowLaCounts);
     
     laMotor->run(RELEASE);
 }
@@ -360,7 +378,7 @@ void setup() {
 
     // Setup the motor shield, create with the default frequency 1.6KHz
     AFMS.begin();
-
+    pinMode(laPositionPin, INPUT_PULLUP);
     calibrateLA();
     
     moveLA(LA_DEFAULT_POSITION);
